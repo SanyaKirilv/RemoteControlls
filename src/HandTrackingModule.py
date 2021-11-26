@@ -1,12 +1,11 @@
 import tkinter as tk
-
 import cv2
 import mediapipe as mp
 import mouse
 import numpy as np
 
 
-def frame_pos2screen_pos(frame_size=(480 , 640), screen_size=(768, 1366), frame_pos=None):
+def frame_pos2screen_pos(frame_size=(1080 , 1920), screen_size=(1080, 1920), frame_pos=None):
     
     x,y = screen_size[1]/frame_size[0], screen_size[0]/frame_size[1]
     
@@ -14,42 +13,38 @@ def frame_pos2screen_pos(frame_size=(480 , 640), screen_size=(768, 1366), frame_
     
     return screen_pos
 
-def euclidean(pt1, pt2):
+def Distance(pt1, pt2):
     d = np.sqrt((pt1[0]-pt2[0])**2+(pt1[1]-pt2[1])**2)
     return d
-euclidean((4, 3), (0, 0))
 
+#SCREEN PARAMS
 root = tk.Tk()
-
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
-
 ssize = (screen_height, screen_width)
-ssize
-
 cam = cv2.VideoCapture(0)
-
-fsize = (520, 720)
-
+fsize = ssize
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
-left, top, right, bottom = (200, 100, 500, 400)
+#RED BOX PARAMS
+left, top, right, bottom = (5, 5, 1915, 1075)
 
-events = ["sclick", "dclick", "rclick", "drag", "release"]
+#POSSIBLE EVENTS
+events = ["left click", "right click", "drag", "release", None]
 
-check_every = 15
-check_cnt = 0
-last_event = None
+#VARIABLES
+check_every_tic = 10
+check_tic = 0
+previous_event = None
+isRelease = 1
 
-out = cv2.VideoWriter("out.avi", cv2.VideoWriter_fourcc(*'XVID'), 30, (fsize[1], fsize[0]))
+#SCREEN OUPUT
+out = cv2.VideoWriter("out.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (fsize[1], fsize[0]))
 
-with mp_hands.Hands(static_image_mode=True,
-                   max_num_hands = 1,
-                   min_detection_confidence=0.5) as hands:
+with mp_hands.Hands(static_image_mode=True, max_num_hands = 1,min_detection_confidence=0.4) as hands:
     while cam.isOpened():
         ret, frame = cam.read()
-        
         if not ret:
             continue
         
@@ -65,99 +60,117 @@ with mp_hands.Hands(static_image_mode=True,
         
         if res.multi_hand_landmarks:
             for hand_landmarks in res.multi_hand_landmarks:
-                index_tip = mp_drawing._normalized_to_pixel_coordinates(
-                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].x,
-                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y,
-                    w, h)
-                
-                index_dip = mp_drawing._normalized_to_pixel_coordinates(
-                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_DIP].x, 
-                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_DIP].y, 
-                    w, h)
-                
-                
-                index_pip = np.array(mp_drawing._normalized_to_pixel_coordinates(
-                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].x, 
-                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].y, 
-                    w, h))
-                
+                #BIG FINGER UP POINT
                 thumb_tip = mp_drawing._normalized_to_pixel_coordinates(
-                    hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].x, 
-                    hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].y, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_IP].x, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_IP].y, 
                     w, h)
-                
+                #INDEX FINGER UP POINT
+                index_tip = mp_drawing._normalized_to_pixel_coordinates(
+                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_DIP].x,
+                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_DIP].y,
+                    w, h)
+                #MIDDLE FINGER UP POINT
                 middle_tip = mp_drawing._normalized_to_pixel_coordinates(
-                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].x, 
-                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_DIP].x, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_DIP].y, 
                     w, h)
+
+                #BIG FINGER DOWN POINT
+                thumb_pip = mp_drawing._normalized_to_pixel_coordinates(
+                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP].x, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP].y, 
+                    w, h)
+                #INDEX FINGER DOWN POINT
+                index_pip = mp_drawing._normalized_to_pixel_coordinates(
+                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].x,
+                    hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].y,
+                    w, h)
+                #MIDDLE FINGER DOWN POINT
+                middle_pip = mp_drawing._normalized_to_pixel_coordinates(
+                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_PIP].x, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_PIP].y, 
+                    w, h)
+
+                #CENTRAL POINT
+                middle = mp_drawing._normalized_to_pixel_coordinates(
+                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_MCP].x, 
+                    hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_MCP].y, 
+                    w, h)
+
             
+                #POINTER POSITION
+                index_tipm = list(middle)
+                index_tipm[0] = np.clip(middle[0], left, right)
+                index_tipm[1] = np.clip(middle[1], top, bottom)
                 
-                index_tipm = list(index_tip)
-                index_tipm[0] = np.clip(index_tipm[0], left, right)
-                index_tipm[1] = np.clip(index_tipm[1], top, bottom)
-                
-                index_tipm[0] = (index_tipm[0]-left) * fsize[0]/(right-left)
-                index_tipm[1] = (index_tipm[1]-top) * fsize[1]/(bottom-top)
+                index_tipm[0] = (middle[0]-left) * fsize[0]/(right-left)
+                index_tipm[1] = (middle[1]-top) * fsize[1]/(bottom-top)
                 
                 
-                if check_cnt == check_every:
-                    if thumb_tip is not None and index_tip is not None and middle_tip is not None:
-                        if euclidean(index_tip, middle_tip)<40:
-                            last_event = "dclick"
+                if check_tic == check_every_tic:
+
+                    #LEFT CLICK
+                    if index_pip is not None and index_tip is not None:
+                        if Distance(index_pip, index_tip) < 10:
+                            previous_event = events[0]
+                            isRelease = 0
                         else:
-                            if last_event == "dclick":
-                                last_event=None
-                    if thumb_tip is not None and index_pip is not None:
-                        if euclidean(thumb_tip, index_pip)<60:
-                            last_event = "sclick"
+                            if previous_event == events[0]:
+                                previous_event = events[4]
+                                isRelease = 1
+
+                    #RIGHT CLICK
+                    if middle_pip is not None and middle_tip is not None:
+                        if Distance(middle_pip, middle_tip) < 10:
+                            previous_event = events[1]
+                            isRelease = 0
                         else:
-                            if last_event == "sclick":
-                                last_event=None
-                    if thumb_tip is not None and index_tip is not None:
-                        if euclidean(thumb_tip, index_tip) < 60:
-                            last_event = "press"
+                            if previous_event == events[1]:
+                                previous_event = events[4]
+                                isRelease = 1
+
+                    #DRAG
+                    if thumb_pip is not None and thumb_tip is not None:
+                        if Distance(thumb_pip, thumb_tip) < 10:
+                            previous_event = events[2]
+                            isRelease = 0
                         else:
-                            if last_event == "press":
-                                last_event="release"
-                    if thumb_tip is not None and middle_tip is not None:
-                        if euclidean(thumb_tip, middle_tip)<60:
-                            last_event = "rclick"
-                        else:
-                            if last_event=="rclick":
-                                last_event=None
-                    check_cnt = 0
+                            if previous_event == events[2]:
+                                previous_event = events[3]
+                                isRelease = 1
+
+                    check_tic = 0
 
                 
-                if check_cnt>1:
-                    last_event = None
+                if check_tic > 3:
+                    previous_event = events[3]
                 
                 
                 screen_pos = frame_pos2screen_pos(fsize, ssize, index_tipm)
                 
-                print(screen_pos)
-                
+                #MOVE MOUSE
                 mouse.move(screen_pos[0], screen_pos[1])
                 
-                if check_cnt==0:
-                    if last_event=="sclick":
+                #CLICK CONTROL
+                if check_tic == 0:
+                    if previous_event == events[0] and isRelease == 1:
                         mouse.click()
-                    elif last_event=="rclick":
+                    elif previous_event == events[1] and isRelease == 1:
                         mouse.right_click()
-                    elif last_event=="dclick":
-                        mouse.double_click()
-                    elif last_event=="press":
+                    elif previous_event == events[3] and isRelease == 1:
                         mouse.press()
-                    else:
+                    elif isRelease == 0:
                         mouse.release()
-                    print(last_event)
-                    cv2.putText(frame, last_event, (20, 20),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                check_cnt += 1
+                    print(previous_event) 
+                check_tic += 1
+                #TEXT OUTPUT
+                cv2.putText(frame, previous_event, (800, 1000), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 2)
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 
-        cv2.imshow("Window", frame)
+        cv2.imshow("RemoteControl", frame)
         out.write(frame)
-        if cv2.waitKey(1)&0xFF == 27:
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 cam.release()
 out.release()
